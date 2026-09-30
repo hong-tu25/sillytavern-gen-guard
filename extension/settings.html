@@ -1,0 +1,41 @@
+<div id="gen_guard_container" class="extension_container">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Generation Guard</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <small>
+                手机端浏览器退到后台时，流式读取可能永久挂起，导致整个聊天界面被锁死。
+                本扩展会在后台超时后主动中止生成，并在回到前台时兜底解锁界面。
+            </small>
+
+            <label class="checkbox_label" for="gen_guard_enabled" title="启用或停用本扩展">
+                <input id="gen_guard_enabled" type="checkbox" />
+                <span data-i18n="Enable Generation Guard">启用 Generation Guard</span>
+            </label>
+
+            <label for="gen_guard_hidden_grace" data-i18n="Background grace period (ms)">后台宽限期（毫秒）</label>
+            <input id="gen_guard_hidden_grace" type="number" min="0" max="600000" step="500" class="text_pole" />
+            <small>页面隐藏后等待多久才中止生成。设为 0 表示隐藏即中止。</small>
+
+            <label for="gen_guard_stall_ms" data-i18n="Stall threshold (ms)">卡死判定阈值（毫秒）</label>
+            <input id="gen_guard_stall_ms" type="number" min="1000" max="600000" step="500" class="text_pole" />
+            <small>回到前台后，若这么长时间内没有任何新内容，则判定为卡死并解锁。</small>
+
+            <label class="checkbox_label" for="gen_guard_show_toast" title="中止或解锁时是否提示">
+                <input id="gen_guard_show_toast" type="checkbox" />
+                <span data-i18n="Show notifications">显示提示</span>
+            </label>
+
+            <label class="checkbox_label" for="gen_guard_diagnostics" title="在浏览器控制台输出诊断日志">
+                <input id="gen_guard_diagnostics" type="checkbox" />
+                <span data-i18n="Diagnostic logging">诊断日志</span>
+            </label>
+
+            <small>
+                本扩展不会自动重试生成。中止后请手动点击「继续」。
+            </small>
+        </div>
+    </div>
+</div>

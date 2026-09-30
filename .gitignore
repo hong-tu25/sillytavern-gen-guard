@@ -1,0 +1,17 @@
+# Dependencies (there are none, but keep the usual suspects out)
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local scratch
+/tmp/
+*.log
+*.local.json

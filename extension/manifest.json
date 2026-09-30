@@ -1,0 +1,14 @@
+{
+    "display_name": "Generation Guard",
+    "loading_order": 150,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "author": "gen-guard",
+    "version": "1.0.0",
+    "homePage": "",
+    "hooks": {
+        "activate": "activate",
+        "disable": "onDisable"
+    }
+}

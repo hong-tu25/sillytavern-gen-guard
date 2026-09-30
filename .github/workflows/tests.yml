@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Extension tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 18 is the floor the extension targets; 22 is the current LTS.
+        node: ['18', '22']
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Verify the repository stays dependency-free
+        run: |
+          failed=0
+          for artifact in package.json package-lock.json pnpm-lock.yaml yarn.lock node_modules; do
+            if [ -e "$artifact" ]; then
+              echo "::error::$artifact must not exist; this extension has no dependencies and no build step."
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: Run the test suite
+        run: node tests/run.mjs

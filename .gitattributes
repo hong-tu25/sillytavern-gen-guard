@@ -1,0 +1,14 @@
+# Normalise line endings so contributors on Windows and Unix see identical files.
+# SillyTavern itself is LF, and the extension is executed directly by the browser,
+# so text files must stay LF regardless of the authoring platform.
+* text=auto eol=lf
+
+# Binary-ish assets (none today, but keep future additions safe)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
