@@ -141,10 +141,10 @@ Node — no browser needed.
 node tests/run.mjs
 ```
 
-Covers 29 logic cases (grace boundaries, stall fallback, idempotence, races, notifications,
-diagnostics, degradation) and 11 static-contract cases (manifest fields, panel controls, no network
-access, no static imports, duplicate-copy parity, ESM marker, zero dependencies, inline-fallback
-parity, failure visibility) — 40 in total.
+Covers 30 logic cases (grace boundaries, stall fallback, idempotence, races, notifications,
+one-tap continue, diagnostics, degradation) and 11 static-contract cases (manifest fields, panel
+controls, no network access, no static imports, duplicate-copy parity, ESM marker, zero
+dependencies, inline-fallback parity, failure visibility) — 41 in total.
 
 > `extension/package.json` only declares `{"type": "module"}` so Node 18 parses `index.js` as an ES
 > module. Node 22+ sniffs module syntax and therefore hides this problem, which is why the CI

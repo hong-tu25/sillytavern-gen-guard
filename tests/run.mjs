@@ -177,7 +177,9 @@ function createEnv({ settings, running = true, stopGeneration = true, eventSourc
         cancel: clock.cancel,
         now: clock.now,
         log: message => { recorder.logs.push(String(message)); },
-        notify: (kind, msg) => { recorder.notifications.push({ kind, msg: String(msg) }); },
+        notify: (kind, msg, options) => {
+            recorder.notifications.push({ kind, msg: String(msg), offerContinue: options?.offerContinue === true });
+        },
     };
 
     return {
@@ -443,6 +445,26 @@ test('L21', 'the guard never auto-retries', () => {
         env.clock.advance(10000);
         equal(env.calls.generate, 0, 'generate() must never be called');
     }
+});
+
+test('L30', 'the abort notification offers a one-tap continue', () => {
+    // On a phone the message-actions menu is easy to miss, so the abort toast must carry its own
+    // continue affordance rather than just naming it in prose.
+    const env = createEnv();
+    env.guard.onVisibilityChange(false);
+    env.clock.advance(5000);
+    equal(env.calls.notifications.length, 1, 'exactly one notification');
+    equal(env.calls.notifications[0].offerContinue, true, 'the stall notification must offer continue');
+
+    const hidden = createEnv();
+    hidden.guard.onVisibilityChange(true);
+    hidden.clock.advance(3000);
+    equal(hidden.calls.notifications[0].offerContinue, true, 'the hidden-grace notification must offer continue');
+
+    const quiet = createEnv({ settings: { showToast: false } });
+    quiet.guard.onVisibilityChange(false);
+    quiet.clock.advance(5000);
+    equal(quiet.calls.notifications.length, 0, 'no notification at all when toasts are disabled');
 });
 
 // --- diagnostics -----------------------------------------------------------

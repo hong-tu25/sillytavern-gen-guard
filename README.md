@@ -49,7 +49,8 @@ Streaming request finished
    `stopGeneration()` 主动中止。这会让挂起的读取立刻失败，酒馆的正常解锁逻辑随即执行。
 2. **回前台静默兜底** —— 回到前台后，若仍判定生成中且连续 `stallMs`（默认 5000ms）
    无任何新内容（内容变化或 token 事件），再次中止并强制解锁界面。
-3. **只提示，不自动重试** —— 避免在用户不知情时多消耗 API 额度。
+3. **只提示，不自动重试** —— 提示里带一个「继续生成」按钮，点它就用 `/continue` 指令接着写。
+   手机上消息操作菜单不好找，这个按钮就是一键续写入口。
 
 > 判定"是否仍在生成"使用 `streamingProcessor.isFinished`，因为酒馆**没有**把
 > `isGenerating()` 暴露给扩展（`public/scripts/st-context.js`）。
@@ -138,9 +139,9 @@ cp /tmp/gen-guard/{manifest.json,index.js,settings.html} \
 node tests/run.mjs
 ```
 
-覆盖 29 个逻辑用例（宽限期边界、静默兜底、幂等、竞态、提示、诊断日志、降级）与
+覆盖 30 个逻辑用例（宽限期边界、静默兜底、幂等、竞态、提示、一键继续、诊断日志、降级）与
 11 个静态契约用例（manifest 字段、面板控件、无网络请求、无静态 import、双份副本一致性、
-ESM 标记与零依赖、内联兜底与模板控件一致、失败路径可见性等），共 40 个。
+ESM 标记与零依赖、内联兜底与模板控件一致、失败路径可见性等），共 41 个。
 
 > `extension/package.json` 只声明 `{"type": "module"}`，用于让 Node 18 正确把 `index.js`
 > 当 ES module 解析（Node 22+ 会自动嗅探 ESM 语法，因此这个坑只在旧版本上暴露）。

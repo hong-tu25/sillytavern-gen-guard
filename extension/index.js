@@ -303,16 +303,23 @@ export function createGenerationGuard(deps) {
 
     /**
      * Reports a stall/abort decision to the user.
+     *
      * @param {'hidden'|'stall'} kind Which rule fired.
      * @param {string} detail Human-readable detail.
+     * @param {boolean} offerContinue Whether to offer a one-tap "continue" action.
      * @returns {void}
      */
-    function notifyAbort(kind, detail) {
+    function notifyAbort(kind, detail, offerContinue) {
         const config = settings();
         if (!config.showToast) return;
-        notify(kind, kind === 'hidden'
+        const message = kind === 'hidden'
             ? `已中止后台中的生成：页面隐藏超过 ${config.hiddenGraceMs}ms 仍未完成。${detail}`
-            : `已解锁卡死的生成：回到前台后 ${config.stallMs}ms 无任何新内容。${detail}`);
+            : `已解锁卡死的生成：回到前台后 ${config.stallMs}ms 无任何新内容。${detail}`;
+        try {
+            notify(kind, message, { offerContinue });
+        } catch {
+            // A failing notification must never break the abort/unlock sequence.
+        }
     }
 
     /**
@@ -355,7 +362,7 @@ export function createGenerationGuard(deps) {
             }
         }
 
-        notifyAbort(kind, '可手动点击「继续」接着写。');
+        notifyAbort(kind, '可点提示里的「继续生成」按钮接着写。', true);
         return true;
     }
 
@@ -555,15 +562,38 @@ function buildProductionDeps() {
             if (!getGenGuardSettings().diagnostics) return;
             console.debug(`${LOG_PREFIX} ${message}`);
         },
-        notify: (kind, message) => {
+        notify: (kind, message, options) => {
             try {
                 if (typeof toastr !== 'undefined' && typeof toastr.warning === 'function') {
-                    toastr.warning(message, kind === 'hidden' ? 'Generation Guard' : 'Generation Guard');
+                    const wantsButton = options?.offerContinue === true;
+                    const html = wantsButton
+                        ? `${escapeHtml(message)}<br><button type="button" class="menu_button gen_guard_continue" data-gen-guard-continue="1" `
+                            + 'style="margin-top:8px;width:auto;">继续生成</button>'
+                        : escapeHtml(message);
+                    toastr.warning(html, 'Generation Guard', {
+                        timeOut: wantsButton ? 30000 : 15000,
+                        extendedTimeOut: 5000,
+                        escapeHtml: false,
+                        tapToDismiss: true,
+                    });
+                    if (wantsButton) {
+                        // Delegated so the handler survives the toast being rebuilt, and bound on the
+                        // container rather than the toast element to avoid relying on toastr internals.
+                        $(document)
+                            .off('click.genGuardToast', '[data-gen-guard-continue]')
+                            .on('click.genGuardToast', '[data-gen-guard-continue]', event => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                requestContinue();
+                                toastr.clear();
+                            });
+                    }
                 }
             } catch (error) {
                 console.warn(`${LOG_PREFIX} notify failed`, error);
             }
         },
+        onContinueRequested: () => requestContinue(),
     };
 }
 
@@ -657,6 +687,49 @@ export function onDisable() {
         detachListeners = null;
     } catch (error) {
         console.warn(`${LOG_PREFIX} onDisable failed`, error);
+    }
+}
+
+/**
+ * Escapes text for safe interpolation into a toast's HTML.
+ * @param {string} text Raw text.
+ * @returns {string} Escaped text.
+ */
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Continues the interrupted message.
+ *
+ * Uses the `/continue` slash command rather than calling an internal API: it is the only
+ * continuation entry point exposed to extensions (`st-context.js:171` exposes
+ * `executeSlashCommandsWithOptions`; `/continue` is registered in `slash-commands.js:1490`).
+ * The user asked for a one-tap continuation, and on a phone the message-actions menu is easy to
+ * miss, so this is the discoverable path.
+ *
+ * @returns {Promise<void>} Resolves once the request has been dispatched.
+ */
+async function requestContinue() {
+    try {
+        const ctx = resolveContext();
+        if (!ctx || typeof ctx.executeSlashCommandsWithOptions !== 'function') {
+            reportProblem('无法继续：当前酒馆版本未暴露指令接口，请手动点击消息下的「继续」');
+            return;
+        }
+        // Never start a second generation while one is already running.
+        if (isGenerating(ctx)) {
+            reportProblem('当前已有生成在进行中，已忽略「继续生成」');
+            return;
+        }
+        await ctx.executeSlashCommandsWithOptions('/continue', { showOutput: false });
+    } catch (error) {
+        reportProblem('「继续生成」执行失败，请手动点击消息下的「继续」', error);
     }
 }
 
