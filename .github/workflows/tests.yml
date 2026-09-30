@@ -3,6 +3,8 @@ name: Tests
 on:
   push:
     branches: ['**']
+    # Also run for version tags, so a release is always backed by a green build.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -21,11 +23,12 @@ jobs:
         # so a missing `"type": "module"` only fails on the older runtime.
         node: ['18', '22']
     steps:
+      # v5 runs on Node 24; v4 emits a "Node.js 20 is deprecated" warning on current runners.
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
 
