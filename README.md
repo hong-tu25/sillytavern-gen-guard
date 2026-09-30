@@ -139,8 +139,8 @@ node tests/run.mjs
 ```
 
 覆盖 29 个逻辑用例（宽限期边界、静默兜底、幂等、竞态、提示、诊断日志、降级）与
-9 个静态契约用例（manifest 字段、面板控件、无网络请求、无静态 import、双份副本一致性、
-ESM 标记与零依赖等），共 38 个。
+11 个静态契约用例（manifest 字段、面板控件、无网络请求、无静态 import、双份副本一致性、
+ESM 标记与零依赖、内联兜底与模板控件一致、失败路径可见性等），共 40 个。
 
 > `extension/package.json` 只声明 `{"type": "module"}`，用于让 Node 18 正确把 `index.js`
 > 当 ES module 解析（Node 22+ 会自动嗅探 ESM 语法，因此这个坑只在旧版本上暴露）。
