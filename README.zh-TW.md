@@ -133,8 +133,13 @@ cp /tmp/gen-guard/{manifest.json,index.js,settings.html} \
 node tests/run.mjs
 ```
 
-涵蓋 28 個邏輯案例（寬限期邊界、靜默期兜底、冪等、競態、提示、診斷記錄、降級）
-與 8 個靜態契約案例（manifest 欄位、面板控制項、無網路請求、無靜態 import 等）。
+涵蓋 29 個邏輯案例（寬限期邊界、靜默期兜底、冪等、競態、提示、診斷記錄、降級）
+與 9 個靜態契約案例（manifest 欄位、面板控制項、無網路請求、無靜態 import、
+雙份副本一致性、ESM 標記與零依賴等），共 38 個。
+
+> `extension/package.json` 只宣告 `{"type": "module"}`，讓 Node 18 正確把 `index.js`
+> 當成 ES module 解析（Node 22+ 會自動嗅探 ESM 語法，因此這個坑只在舊版本上暴露）。
+> **倉庫根目錄刻意不放 `package.json`**，這樣酒館的「安裝擴充功能」拉到的就是乾淨的擴充檔案。
 
 ## 授權
 

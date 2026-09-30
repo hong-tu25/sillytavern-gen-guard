@@ -17,6 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         # 18 is the floor the extension targets; 22 is the current LTS.
+        # Both matter: Node 22+ sniffs ES module syntax in .js files, Node 18 does not,
+        # so a missing `"type": "module"` only fails on the older runtime.
         node: ['18', '22']
     steps:
       - name: Check out
@@ -27,16 +29,37 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Verify the repository stays dependency-free
+      - name: Verify the extension stays dependency-free
         run: |
           failed=0
-          for artifact in package.json package-lock.json pnpm-lock.yaml yarn.lock node_modules; do
+          for artifact in node_modules package-lock.json pnpm-lock.yaml yarn.lock; do
             if [ -e "$artifact" ]; then
               echo "::error::$artifact must not exist; this extension has no dependencies and no build step."
               failed=1
             fi
           done
+          if [ -e package.json ]; then
+            echo "::error::the repository root must stay free of package.json so SillyTavern's 'Install extension' flow sees only the extension files."
+            failed=1
+          fi
           exit $failed
+
+      - name: Verify the extension declares no dependencies
+        run: |
+          node -e "
+            const pkg = require('./extension/package.json');
+            const deps = Object.keys(pkg.dependencies ?? {});
+            const devDeps = Object.keys(pkg.devDependencies ?? {});
+            if (deps.length || devDeps.length) {
+              console.error('extension/package.json must declare no dependencies');
+              process.exit(1);
+            }
+            if (pkg.type !== 'module') {
+              console.error('extension/package.json must set \"type\": \"module\" so index.js parses as ESM on Node 18');
+              process.exit(1);
+            }
+            console.log('extension declares zero dependencies and is an ES module');
+          "
 
       - name: Run the test suite
         run: node tests/run.mjs

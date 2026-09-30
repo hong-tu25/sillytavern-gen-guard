@@ -599,10 +599,15 @@ test('S04', 'the mobile-safe triggers and host APIs are used', () => {
     excludes(source, 'location.reload', 'the guard must never reload the page');
 });
 
-test('S05', 'the extension directory holds exactly the three shipped files', () => {
+test('S05', 'the extension directory holds the shipped files plus the ESM marker', () => {
     const entries = fs.readdirSync(extensionDir).sort();
-    equal(entries.length, 3, `expected exactly three files, found: ${entries.join(', ')}`);
     for (const name of SHIPPED_FILES) ok(entries.includes(name), `${name} must exist`);
+    // `package.json` exists only to declare `"type": "module"`. Without it, Node 18 parses
+    // index.js as CommonJS and fails on the first `export` — a failure Node 22+ masks because it
+    // sniffs module syntax.
+    ok(entries.includes('package.json'), 'extension/package.json must exist as the ESM marker');
+    const unexpected = entries.filter(name => ![...SHIPPED_FILES, 'package.json'].includes(name));
+    ok(unexpected.length === 0, `unexpected files in extension/: ${unexpected.join(', ')}`);
 });
 
 test('S06', 'the root and extension copies are byte-identical', () => {
@@ -613,6 +618,23 @@ test('S06', 'the root and extension copies are byte-identical', () => {
         const rootCopy = fs.readFileSync(path.join(repoRoot, name));
         const nestedCopy = fs.readFileSync(path.join(extensionDir, name));
         ok(rootCopy.equals(nestedCopy), `${name} differs between the repository root and extension/`);
+    }
+});
+
+test('S08', 'the extension package.json declares no dependencies', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(extensionDir, 'package.json'), 'utf8'));
+    equal(pkg.type, 'module', 'the ESM marker must set "type": "module"');
+    equal(Object.keys(pkg.dependencies ?? {}).length, 0, 'no runtime dependencies are allowed');
+    equal(Object.keys(pkg.devDependencies ?? {}).length, 0, 'no dev dependencies are allowed');
+    // The repository root must stay free of package.json so that SillyTavern's installer, which
+    // copies the repository, does not pick up files beyond the extension itself.
+    ok(!fs.existsSync(path.join(repoRoot, 'package.json')), 'the repository root must not contain package.json');
+});
+
+test('S09', 'the repository root ships exactly three installable files', () => {
+    // Files a user drags into public/scripts/extensions/third-party/gen-guard/
+    for (const name of SHIPPED_FILES) {
+        ok(fs.existsSync(path.join(repoRoot, name)), `${name} must exist at the repository root`);
     }
 });
 

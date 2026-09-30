@@ -1,0 +1,9 @@
+{
+    "name": "gen-guard",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "ES module marker only. The extension has no dependencies and no build step; this file exists so Node treats index.js as an ES module when the test suite imports it.",
+    "license": "AGPL-3.0-or-later",
+    "dependencies": {}
+}
