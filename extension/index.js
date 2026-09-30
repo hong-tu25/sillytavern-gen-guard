@@ -633,13 +633,15 @@ export function activate() {
             }
         };
 
-        renderSettingsPanel(deps);
+        renderSettingsPanel(deps).catch(error => {
+            reportProblem('设置面板渲染失败', error);
+        });
 
         if (settingsNow.diagnostics) {
             console.debug(`${LOG_PREFIX} activated (hiddenGraceMs=${settingsNow.hiddenGraceMs}, stallMs=${settingsNow.stallMs})`);
         }
     } catch (error) {
-        console.warn(`${LOG_PREFIX} activate failed`, error);
+        reportProblem('扩展启动失败', error);
     }
 }
 
@@ -659,59 +661,183 @@ export function onDisable() {
 }
 
 /**
+ * Reports a problem in a way a phone user can actually notice.
+ *
+ * A silent `console.warn` is useless on mobile, where there is no console by default — which is
+ * exactly how a broken settings panel can go unnoticed. Every degraded path therefore surfaces a
+ * toast as well.
+ *
+ * @param {string} context Short description of what failed.
+ * @param {unknown} [error] Underlying error.
+ * @returns {void}
+ */
+function reportProblem(context, error) {
+    const detail = error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error ?? '');
+    console.warn(`${LOG_PREFIX} ${context}`, error);
+    try {
+        if (typeof toastr !== 'undefined' && typeof toastr.error === 'function') {
+            toastr.error(`[gen-guard] ${context}${detail ? `：${detail}` : ''}`, 'Generation Guard', { timeOut: 15000 });
+        }
+    } catch {
+        // Reporting must never itself throw into the host's activation path.
+    }
+}
+
+/**
+ * Builds the settings panel markup inline.
+ *
+ * Used as a fallback when the `settings.html` template cannot be fetched, so the panel is not
+ * hostage to template loading. `settings.html` and this markup must stay in sync; the test suite
+ * asserts the five control ids exist.
+ *
+ * @returns {string} Panel HTML.
+ */
+function buildInlineSettingsHtml() {
+    return `
+<div id="gen_guard_container" class="extension_container">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>Generation Guard</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <small>手机端浏览器退到后台时，流式读取可能永久挂起，导致整个聊天界面被锁死。
+            本扩展会在后台超时后主动中止生成，并在回到前台时兜底解锁界面。</small>
+            <label class="checkbox_label" for="gen_guard_enabled">
+                <input id="gen_guard_enabled" type="checkbox" />
+                <span>启用 Generation Guard</span>
+            </label>
+            <label for="gen_guard_hidden_grace">后台宽限期（毫秒）</label>
+            <input id="gen_guard_hidden_grace" type="number" min="0" max="600000" step="500" class="text_pole" />
+            <small>页面隐藏后等待多久才中止生成。设为 0 表示隐藏即中止。</small>
+            <label for="gen_guard_stall_ms">卡死判定阈值（毫秒）</label>
+            <input id="gen_guard_stall_ms" type="number" min="1000" max="600000" step="500" class="text_pole" />
+            <small>回到前台后，若这么长时间内没有任何新内容，则判定为卡死并解锁。</small>
+            <label class="checkbox_label" for="gen_guard_show_toast">
+                <input id="gen_guard_show_toast" type="checkbox" />
+                <span>显示提示</span>
+            </label>
+            <label class="checkbox_label" for="gen_guard_diagnostics">
+                <input id="gen_guard_diagnostics" type="checkbox" />
+                <span>诊断日志</span>
+            </label>
+            <small>本扩展不会自动重试生成。中止后请手动点击「继续」。</small>
+        </div>
+    </div>
+</div>`;
+}
+
+/**
+ * Adds a wand-menu entry so the panel can be reached on mobile without hunting through settings.
+ *
+ * The wand menu is the one UI reachable in a single tap on a phone, so a shortcut there is the
+ * difference between "settings exist" and "settings are findable".
+ *
+ * @returns {void}
+ */
+function addWandMenuEntry() {
+    try {
+        if (typeof $ === 'undefined') return;
+        const menu = $('#extensionsMenu');
+        if (menu.length === 0 || $('#gen_guard_wand_entry').length > 0) return;
+
+        const entry = $('<div id="gen_guard_wand_entry" class="list-group-item flex-container flexGap5 interactive_discard"></div>')
+            .attr('title', '打开 Generation Guard 设置')
+            .append('<div class="fa-solid fa-shield-halved extensionsMenuExtensionButton"></div>')
+            .append('<span>Generation Guard</span>');
+
+        entry.on('click', () => {
+            const panel = document.getElementById('gen_guard_container');
+            if (panel) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                $(panel).find('.inline-drawer-content').slideDown();
+                return;
+            }
+            // The panel is missing: say so explicitly instead of failing silently.
+            reportProblem('未找到设置面板，请重新加载页面后重试');
+        });
+
+        menu.append(entry);
+    } catch (error) {
+        reportProblem('菜单入口创建失败', error);
+    }
+}
+
+/**
  * Renders the settings panel into the extensions drawer.
  *
  * Uses event delegation so repeated `activate()` calls cannot stack duplicate handlers
  * (`30-config-contract.md` §5).
  *
- * @param {GuardDeps} deps Dependency set (unused values are read fresh on each change).
+ * @param {GuardDeps} deps Dependency set (used only for the diagnostic log sink).
  * @returns {Promise<void>} Resolves once rendering completes.
  */
 async function renderSettingsPanel(deps) {
+    if (typeof $ === 'undefined') return;
+
+    const ctx = resolveContext();
+
+    /** @type {string} */
+    let html;
     try {
-        const ctx = resolveContext();
-        if (!ctx || typeof ctx.renderExtensionTemplateAsync !== 'function') return;
-
-        const html = await ctx.renderExtensionTemplateAsync('third-party/gen-guard', 'settings');
-        if (typeof $ !== 'undefined' && typeof $('#extensions_settings2').length === 1) {
-            const container = $('#gen_guard_container');
-            if (container.length === 0) {
-                $('#extensions_settings2').append(html);
-            }
+        if (ctx && typeof ctx.renderExtensionTemplateAsync === 'function') {
+            html = await ctx.renderExtensionTemplateAsync('third-party/gen-guard', 'settings');
+        } else {
+            html = buildInlineSettingsHtml();
         }
-
-        if (typeof $ === 'undefined') return;
-
-        const settingsNow = getGenGuardSettings();
-        $('#gen_guard_enabled').prop('checked', settingsNow.enabled);
-        $('#gen_guard_hidden_grace').val(settingsNow.hiddenGraceMs);
-        $('#gen_guard_stall_ms').val(settingsNow.stallMs);
-        $('#gen_guard_show_toast').prop('checked', settingsNow.showToast);
-        $('#gen_guard_diagnostics').prop('checked', settingsNow.diagnostics);
-
-        // Delegated handlers: safe across repeated activation.
-        $(document)
-            .off('input.genGuard change.genGuard')
-            .on('input.genGuard change.genGuard', DOM_IDS.enabled, function () {
-                persist({ enabled: Boolean($(this).prop('checked')) });
-            })
-            .on('input.genGuard change.genGuard', DOM_IDS.hiddenGraceMs, function () {
-                persist({ hiddenGraceMs: Number($(this).val()) });
-            })
-            .on('input.genGuard change.genGuard', DOM_IDS.stallMs, function () {
-                persist({ stallMs: Number($(this).val()) });
-            })
-            .on('input.genGuard change.genGuard', DOM_IDS.showToast, function () {
-                persist({ showToast: Boolean($(this).prop('checked')) });
-            })
-            .on('input.genGuard change.genGuard', DOM_IDS.diagnostics, function () {
-                persist({ diagnostics: Boolean($(this).prop('checked')) });
-            });
-
-        deps?.log?.(`${LOG_PREFIX} settings panel ready`);
     } catch (error) {
-        console.warn(`${LOG_PREFIX} settings panel failed`, error);
+        // Template loading must never block the panel: fall back to the inline markup.
+        console.warn(`${LOG_PREFIX} settings template unavailable; using inline markup`, error);
+        html = buildInlineSettingsHtml();
     }
+
+    if (!html) {
+        html = buildInlineSettingsHtml();
+    }
+
+    const existing = $('#gen_guard_container');
+    if (existing.length === 0) {
+        // Prefer the standard extensions drawer; fall back to the first settings container present.
+        const target = $('#extensions_settings2').length > 0
+            ? $('#extensions_settings2')
+            : ($('#extensions_settings').length > 0 ? $('#extensions_settings') : $('body'));
+        target.append(html);
+    }
+
+    if ($('#gen_guard_container').length === 0) {
+        reportProblem('设置面板未能插入页面，可能是酒馆版本不兼容');
+        return;
+    }
+
+    const settingsNow = getGenGuardSettings();
+    $('#gen_guard_enabled').prop('checked', settingsNow.enabled);
+    $('#gen_guard_hidden_grace').val(settingsNow.hiddenGraceMs);
+    $('#gen_guard_stall_ms').val(settingsNow.stallMs);
+    $('#gen_guard_show_toast').prop('checked', settingsNow.showToast);
+    $('#gen_guard_diagnostics').prop('checked', settingsNow.diagnostics);
+
+    // Delegated handlers: safe across repeated activation.
+    $(document)
+        .off('input.genGuard change.genGuard')
+        .on('input.genGuard change.genGuard', DOM_IDS.enabled, function () {
+            persist({ enabled: Boolean($(this).prop('checked')) });
+        })
+        .on('input.genGuard change.genGuard', DOM_IDS.hiddenGraceMs, function () {
+            persist({ hiddenGraceMs: Number($(this).val()) });
+        })
+        .on('input.genGuard change.genGuard', DOM_IDS.stallMs, function () {
+            persist({ stallMs: Number($(this).val()) });
+        })
+        .on('input.genGuard change.genGuard', DOM_IDS.showToast, function () {
+            persist({ showToast: Boolean($(this).prop('checked')) });
+        })
+        .on('input.genGuard change.genGuard', DOM_IDS.diagnostics, function () {
+            persist({ diagnostics: Boolean($(this).prop('checked')) });
+        });
+
+    addWandMenuEntry();
+
+    deps?.log?.(`${LOG_PREFIX} settings panel ready`);
 }
 
 /**

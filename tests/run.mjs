@@ -638,6 +638,37 @@ test('S09', 'the repository root ships exactly three installable files', () => {
     }
 });
 
+test('S10', 'the inline fallback markup stays in sync with settings.html', () => {
+    // The extension renders settings.html when the template can be fetched and falls back to inline
+    // markup otherwise. If the two drift, users see different controls depending on whether the
+    // fetch succeeded — so both must expose exactly the same ids.
+    const source = fs.readFileSync(path.join(extensionDir, 'index.js'), 'utf8');
+    const html = fs.readFileSync(path.join(extensionDir, 'settings.html'), 'utf8');
+
+    const inlineStart = source.indexOf('function buildInlineSettingsHtml()');
+    ok(inlineStart > -1, 'index.js must define buildInlineSettingsHtml() as the fallback');
+    const inlineBlock = source.slice(inlineStart, source.indexOf('function addWandMenuEntry()', inlineStart));
+    ok(inlineBlock.length > 200, 'the inline fallback must actually contain markup');
+
+    for (const id of ['gen_guard_enabled', 'gen_guard_hidden_grace', 'gen_guard_stall_ms', 'gen_guard_show_toast', 'gen_guard_diagnostics']) {
+        contains(inlineBlock, `id="${id}"`, `the inline fallback must expose ${id}`);
+        contains(html, `id="${id}"`, `settings.html must expose ${id}`);
+    }
+});
+
+test('S11', 'every degraded path is visible to the user', () => {
+    const source = fs.readFileSync(path.join(extensionDir, 'index.js'), 'utf8');
+    // A silent console.warn is useless on a phone, which is how a broken panel went unnoticed.
+    contains(source, 'function reportProblem', 'a visible failure reporter must exist');
+    contains(source, "toastr.error", 'failures must surface as a toast');
+    contains(source, '设置面板未能插入页面', 'panel insertion failure must be reported');
+    // The template fetch must not be able to block the panel.
+    contains(source, 'buildInlineSettingsHtml()', 'the panel must fall back to inline markup');
+    // A one-tap entry point for mobile.
+    contains(source, 'addWandMenuEntry', 'a wand-menu entry must be provided');
+    contains(source, 'extensionsMenu', 'the wand menu must be addressed by its real container id');
+});
+
 test('S07', 'required repository files are present', () => {
     for (const name of ['README.md', 'README.en.md', 'README.zh-TW.md', 'LICENSE', 'CHANGELOG.md', '.gitignore']) {
         ok(fs.existsSync(path.join(repoRoot, name)), `${name} must exist at the repository root`);
